@@ -15,8 +15,8 @@ uint8_t nowStatus;	 //干簧管当前状态
 
 uint16_t CounterNum = 0;   //计数器圈数
 
-Line LengthLine;
-float prelinelen;
+Line LengthLine;      //线长的各种参数
+uint16_t prelinelen = 0;  //前一次的线长，用于更新显示数据
 //uint16_t CounterNum_t = 0; //计数器圈数缓存 用于对比当前圈数
 //时间计数1ms计一次
 void TimeCounter(void)
@@ -25,25 +25,34 @@ void TimeCounter(void)
 		KP_PressTime++;
 }
 
-
+//线长参数初始化
 void LineInit(void)
 {
 	LengthLine.linenumber = 8;
 	LengthLine.linedia = LINEDIA;
 	LengthLine.linelen = 300000;   
-	LengthLine.linewheeldia = LINEWHDIA;
+	LengthLine.linewheeldia = LINEWHDIA + LINEWHDIABIA;
 	LengthLine.slotwidth = 330;
 	LengthLine.length = 0;
-	prelinelen = 0;
+	LengthLine.dislen = 0;
 }
 
-void DisplayData(uint8_t num)
+//显示屏数据显示
+void DisplayData(uint16_t num)
 {
+	uint8_t thon = 0;
 	uint8_t hun = 0;
 	uint8_t ten = 0;
 	uint8_t unit = 0;
 
-	if(num >= 100)
+	if(num >= 1000)
+	{
+		thon = num / 1000;
+		hun = (num % 1000) / 100;
+		ten = (num % 100) / 10;
+		unit = num	% 10;
+	}
+	else if(num >= 100)
 	{
 		hun = num / 100;
 		ten = (num % 100) / 10;
@@ -58,37 +67,74 @@ void DisplayData(uint8_t num)
 	{
 		unit = num;
 	}
-	
+	LCD_WriteNum(thon, DSP1, 0);
 	LCD_WriteNum(hun, DSP2, 0);
-	LCD_WriteNum(ten, DSP3, 0);
+	LCD_WriteNum(ten, DSP3, 1);
 	LCD_WriteNum(unit, DSP4, 0);
 }
 
-void LenAdd(void)
+//总长度计算
+void LenCounter(void)
 {
-	LengthLine.length += LengthLine.linedia * PI;  //计算长度
+	int num_t = CounterNum;
+	
+	LengthLine.linewheeldia = LINEWHDIA + LINEWHDIABIA;
+	LengthLine.length = 0;
+	
+	for(uint8_t i = 0;i < (num_t / SUBNUM);i++)
+	{
+		LengthLine.length += SUBNUM * (LengthLine.linewheeldia - LengthLine.linedia) * PI; 
+		LengthLine.linewheeldia -= LengthLine.linedia;
+	}
+	
+	LengthLine.length += (num_t % SUBNUM) * (LengthLine.linewheeldia - LengthLine.linedia) * PI;
+
+	LengthLine.dislen = (uint16_t)(LengthLine.length / 1000 * 10);
 }
 
+//长度加一圈
+void LenAdd(void)
+{
+	LengthLine.length += (LengthLine.linewheeldia - LengthLine.linedia) * PI;  //计算长度
+	LengthLine.dislen = (uint16_t)(LengthLine.length / 1000 * 10);
+}
+
+//长度减一圈
 void LenSub(void)
 {
-	LengthLine.length -= LengthLine.linedia * PI;  //计算长度
+	LengthLine.length -= (LengthLine.linewheeldia - LengthLine.linedia) * PI;  //计算长度
 	if(LengthLine.length < 0)
 	{
 		LengthLine.length = 0;
 	}
+	
+	LengthLine.dislen = (uint16_t)(LengthLine.length / 1000 * 10);
 }
 
-void DisplayLen(uint16_t num)
+//线轮当前直径计算
+void LineWheelDiaCounter(void)
 {
-	float templen = len / 1000; //毫米转化为米
-	templen = ((float)((int)(len * 10))) / 10;
-	if(num > 50)
+	if(CounterNum > SUBNUM)
 	{
-		
+		LengthLine.linewheeldia = (LINEWHDIA + LINEWHDIABIA) - (CounterNum / SUBNUM * LengthLine.linedia);
 	}
-	LengthLine.length = num * LengthLine.linedia * PI;  //计算长度
+	else
+	{
+		LengthLine.linewheeldia = LINEWHDIA + LINEWHDIABIA;
+	}
 }
 
+//显示当前长度
+void DisplayLen(uint16_t dislen)
+{
+	if(prelinelen != dislen)
+	{
+		prelinelen = dislen;
+		DisplayData(dislen);
+	}
+}
+
+//关闭显示 进入低功耗模式
 void BoardClose(void)
 {
 	LCD_ClearAll();
@@ -104,6 +150,7 @@ void BoardClose(void)
 	halt();
 }
 
+//启动初始化
 void BoardInit(void)
 {
 	if(InitFlag == 0)
@@ -120,6 +167,7 @@ void BoardInit(void)
 		BoardSt = BOOT_RUN;
 		KP_PressTime = 0;
 		CounterNum = 0;
+		LineInit();
 		LCD_WriteBaterry(3);
 		DisplayData(CounterNum);
 		StatusInit();
@@ -127,6 +175,7 @@ void BoardInit(void)
 
 }
 
+//状态初始化
 void StatusInit(void)
 {
 	if(ReadKeyValue(KEYRSB) == 1 && ReadKeyValue(KEYRSF) == 1)
@@ -146,6 +195,7 @@ void StatusInit(void)
 	}
 }
 
+//计数处理函数
 void CounterNumHandler(void)
 {
 	if(ReadKeyValue(KEYRSB) == 1 && ReadKeyValue(KEYRSF) == 1)
@@ -166,14 +216,20 @@ void CounterNumHandler(void)
 		if(CounterNum > 0)
 		{
 			CounterNum--;
-			DisplayData(CounterNum);
+			LenCounter();
+//			LineWheelDiaCounter();
+//			LenSub();
+//			DisplayData(CounterNum);
 		}
 		preStatus = nowStatus;
 	}
 	else if(nowStatus == RSSTATUS2 && preStatus == RSSTATUS1)
 	{
 		CounterNum++;
-		DisplayData(CounterNum);
+		LenCounter();
+//		LineWheelDiaCounter();
+//		LenAdd();
+//		DisplayData(CounterNum);
 		preStatus = nowStatus;
 	}
 	else
@@ -186,6 +242,7 @@ void BoardStart(void)
 {
 
 	CounterNumHandler();
+	DisplayLen(LengthLine.dislen);
 	KeyShakeCheck();
 	KeyHandler();
 	
@@ -207,7 +264,8 @@ void KeyHandler(void)
 			if(KR_flag == 0)
 			{
 				CounterNum = 0;
-				DisplayData(CounterNum);
+				LineInit();
+//				DisplayData(CounterNum);
 				LED_Toggle();
 				KR_flag = 1;
 			}

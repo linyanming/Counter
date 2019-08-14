@@ -65,7 +65,7 @@ void main(void)
 	SystemInit();
 	LED_Config();
 	KeyInit();
-	LineInit();
+
 	enableInterrupts();
 	/* Infinite loop */
 	while (1)

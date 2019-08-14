@@ -25,7 +25,8 @@
 #define LINEDIA 0.29      //线直径     单位：mm
 #define SLOTWD  330       //线槽宽度
 #define LINEWHDIA 20.28   //线轮直径
-#define SUBNUM 50         //每当圈数计数该数值线轮直径需要减一次线直径
+#define SUBNUM 30         //每当圈数计数该数值线轮直径需要减一次线直径
+#define LINEWHDIABIA 1       //线轮直径偏移误差,绕线是斜的
 
 typedef struct
 {
@@ -35,6 +36,7 @@ typedef struct
 	float linewheeldia;  //线轮直径
 	uint32_t linelen;    //线总长
 	float length;        //当前长度
+	uint16_t dislen;        //需要显示的长度
 }Line;
 
 
@@ -42,12 +44,18 @@ extern uint8_t BoardSt;
 
 void TimeCounter(void);
 void dspnum(void);
-void DisplayData(uint8_t num);
+void DisplayData(uint16_t num);
 void KeyHandler(void);
 void ControlHandler(void);
 void StatusInit(void);
 void CounterNumHandler(void);
 void LineInit(void);
+void LenAdd(void);
+void LenSub(void);
+void LineWheelDiaCounter(void);
+void DisplayLen(uint16_t dislen);
+void LenCounter(void);
+
 
 #endif
 
